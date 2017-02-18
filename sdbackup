@@ -1,0 +1,173 @@
+#!/bin/bash
+###############################################################################
+# SDBackup
+# A script to backup a device such as an SD Card to a compressed image
+###############################################################################
+
+# Settings
+THISAPP=sdbackup
+TEMPFOLDER=/tmp/sdbackup
+SETTINGSFILE=~/.sdbackup
+DEFAULTDEV=""
+
+# Automatically install what we need
+if [[ ! `type -P "unp"` || ! `type -P "ddrescue"` || ! `type -P "lshw"` ]]; then
+  echo "It looks like this is the first time $THISAPP has been run."
+  echo "Installing required packages..."
+  echo
+  sudo apt-get install unp gddrescue lshw || { echo "Error: Please install unp, gddrescue and lshw" 1>&2; exit 1;}
+  echo "Done..."
+  echo
+fi
+
+# Create the temporary folder if it doesn't already exist
+if [[ ! -d "$TEMPFOLDER" ]]; then
+  mkdir "$TEMPFOLDER" || { echo "Error: Cannot create temporary folder" 1>&2; exit 1; }
+fi
+
+# Check filename parameter is present
+if [[ "$1" = "" ]]; then
+  echo "Usage: $THISAPP <filename> [<device>]" 1>&2
+  exit
+fi
+
+# Automatically add .gz extension if its not there
+FILE="$1"
+if ! [[ "`echo $FILE | rev | cut -c1-3`" = "zg." ]]; then
+  FILE+=".gz"
+fi
+
+# Check target file doesnt already exist
+if [[ -d "$FILE" ]]; then
+  echo "Error: $FILE is a directory?" 1>&2
+  exit 1
+elif [[ -f "$FILE" ]]; then
+  # Confirm overwite
+  read -p "$FILE already exists, should it be deleted? [y/N]: " -n1 AGREE
+  if ! [[ "$AGREE" =~ ^[yY]$ ]]; then
+    exit
+  fi
+  echo
+  rm "$FILE" || { echo "Error: Cannot delete $FILE" 1>&2; exit 1; }
+  echo "Deleted $FILE"
+  echo
+fi
+
+# Get a device name
+if [[ "$2" != "" ]]; then
+  # Supplied on CLI
+  DEV="$2"
+else
+
+  # Get the default
+  if [[ -f "$SETTINGSFILE" ]]; then
+    DEFAULTDEV=`cat "$SETTINGSFILE"`
+  fi
+
+  # Scan for disks
+  echo "Scanning drives..."
+  declare -a DEVICES
+  declare -a SIZES
+  declare -a NAMES
+  DEVICE=0;
+  while read LINE; do
+    if grep -q 'description: ' <<< "$LINE"; then
+      DEVICE=$((DEVICE+1))
+      DEVICES[$DEVICE]=""
+      SIZES[$DEVICE]=""
+      NAMES[$DEVICE]=""
+    elif grep -q 'logical name: ' <<< "$LINE"; then
+      DEVICES[$DEVICE]="`cut -d':' -f2 <<< $LINE`"
+    elif grep -q 'size:' <<< "$LINE"; then
+      SIZES[$DEVICE]+="`cut -d':' -f2 <<< $LINE`"
+    elif grep -q 'product: ' <<< "$LINE"; then
+      NAMES[$DEVICE]+="`cut -d':' -f2 <<< $LINE`"
+    fi
+  done < <(sudo lshw -class disk 2> /dev/null)
+
+  # Display a list of options
+  echo
+  DEFAULTSELECT=0
+  for I in "${!DEVICES[@]}"; do
+    if [[ "${SIZES[$I]}" ]]; then
+      echo "$I) ${DEVICES[$I]} ${NAMES[$I]}${SIZES[$I]}"
+    else
+      echo "$I) ${DEVICES[$I]} ${NAMES[$I]} (currently empty)"
+    fi
+    if [[ "${DEVICES[$I]:1}" = "$DEFAULTDEV" ]]; then
+      DEFAULTSELECT=$I
+    fi
+  done
+  echo "0)  Cancel"
+
+  # Ask the user to select
+  echo
+  DEV=""
+  while ! [[ "$DEV" ]]; do
+    read -p "Please select your device [$DEFAULTSELECT]: " SELECTED
+    if ! [[ "$SELECTED" ]]; then
+      SELECTED=$DEFAULTSELECT
+    fi
+    if [[ "$SELECTED" = 0 ]]; then
+      exit;
+    fi
+    if [[ "$SELECTED" =~ ^[01234567890]$ ]]; then
+      DEV="${DEVICES["$SELECTED"]:1}"
+    fi
+  done
+
+fi
+
+# Check the device exists
+if [[ ! -b "$DEV" ]]; then
+  echo "Error: $DEV is not a block device?" 1>&2
+  exit 1;
+fi
+
+# Confirm
+read -p "Backup from $DEV to $FILE is that correct? [y/N]: " -n1 AGREE
+if ! [[ "$AGREE" =~ ^[yY]$ ]]; then
+  exit
+fi
+echo
+echo
+
+# Filenames
+LOCKFILE="$TEMPFOLDER/`echo "$DEV" | tr "/" "_"`.lock"
+TEMPFILE="$TEMPFOLDER/`echo "$FILE_$DEV" | tr "/" "_"`.tempfile"
+
+# Test and create lockfile
+if [[ -f $LOCKFILE ]]; then
+  echo "Error: There is a `cat $LOCKFILE` currently running on $DEV" 1>&2;
+  exit 1;
+fi
+echo $THISAPP > $LOCKFILE
+
+# Trap for failure
+trap 'rm "$LOCKFILE" 2> /dev/null; rm "$TEMPFILE" 2> /dev/null;' EXIT
+
+# Clean up anything left over from a previous attempt
+sudo rm "$TEMPFILE" 2> /dev/null
+
+# Unmount the card
+echo "Unmounting any mounted partitions..."
+for PARTITION in "$DEV"*; do
+  if [[ -b "$PARTITION" ]]; then
+    if egrep -qs ^"$PARTITION " /proc/mounts; then
+      sudo umount "$PARTITION" 2> /dev/null || { echo "Error: Cannot unmount $PARTITION" 1>&2; exit 1; }
+    fi
+  fi
+done
+
+# Create a temp file with our user (so we don't need sudo to delete it)
+touch "$TEMPFILE"
+
+# Back it up
+echo "Copying data from $DEV..."
+echo
+sudo ddrescue "$DEV" "$TEMPFILE" || exit 1;
+echo
+echo "Zipping..."
+gzip --stdout "$TEMPFILE" > "$FILE" || { echo "Error: Cannot compress the file" 1>&2; exit 1; }
+echo "Backup complete."
+echo "$DEV" > "$SETTINGSFILE"
