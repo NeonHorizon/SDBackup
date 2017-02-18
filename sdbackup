@@ -33,7 +33,7 @@ fi
 
 # Automatically add .gz extension if its not there
 FILE="$1"
-if ! [[ "`echo $FILE | rev | cut -c1-3`" = "zg." ]]; then
+if ! [[ "`echo \"$FILE\" | rev | cut -c1-3`" = "zg." ]]; then
   FILE+=".gz"
 fi
 

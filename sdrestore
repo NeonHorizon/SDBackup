@@ -153,7 +153,7 @@ for PARTITION in "$DEV"*; do
 done
 
 # See if the file needs decompressing
-if [[ "`file "$FILE" | grep 'compressed\|archive'`" ]]; then
+if [[ "`file \"$FILE\" | grep 'compressed\|archive'`" ]]; then
   # Decompress the file
   echo "Decompressing..."
   ucat "$FILE" > "$TEMPFILE" 2> "$ERRFILE" || { echo "Error: Cannot decompress $FILE" 1>&2; exit 1; }
@@ -168,7 +168,7 @@ else
 fi
 
 # Restore the file
-echo "Restoring "`ls -lah $RESTOREFILE | awk -F " " {'print $5'}`" to $DEV..."
+echo "Restoring "`ls -lah "$RESTOREFILE" | awk -F " " {'print $5'}`" to $DEV..."
 echo
 sudo ddrescue --force --synchronous "$RESTOREFILE" "$DEV" || exit 1;
 echo
