@@ -167,6 +167,12 @@ else
   RESTOREFILE="$FILE"
 fi
 
+# Check its not still compressed
+if [[ "`file \"$RESTOREFILE\" | grep 'compressed\|archive'`" ]]; then
+  echo "Error: Cannot decompress $FILE" 1>&2;
+  exit 1;
+fi
+
 # Restore the file
 echo "Restoring "`ls -lah "$RESTOREFILE" | awk -F " " {'print $5'}`" to $DEV..."
 echo
