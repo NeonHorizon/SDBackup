@@ -1,7 +1,7 @@
 SDBackup
 ========
 
-- **Description:** SDBackup is a utility for backing up devices such as flash memory cards and hard drives
+- **Description:** SDBackup is a utility for backing up and restoring devices such as flash memory cards, memory sticks and hard drives
 - **Project Website:** [GitHub](https://github.com/NeonHorizon/SDBackup)
 - **Requirements:** An Ubuntu Linux installation or equivalent
 - **License:** GPL Version 3
