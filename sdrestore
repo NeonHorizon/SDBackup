@@ -1,8 +1,12 @@
 #!/bin/bash
-###############################################################################
-# SDRestore
-# A script to decompress and restore an image onto a device such as an SD Card
-###############################################################################
+#--------------------------------------------------------------------------------
+#  SDRestore
+#  A script to decompress and restore an image onto a device such as an SD Card
+#--------------------------------------------------------------------------------
+#  Daniel Bull
+#  daniel@neonhorizon.co.uk
+#------------------------------------------------------------------------------*/
+
 
 # Settings
 THISAPP=sdrestore
